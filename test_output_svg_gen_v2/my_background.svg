@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink" baseProfile="full" height="500px" version="1.1" width="500px">
+  <defs>
+    <style type="text/css"><![CDATA[.red_class{fill:red;} .black_class{fill:black;}]]></style>
+  </defs>
+  <g id="actual_background_content">
+    <path class="red_class" d="M100,100 L300,100 L200,300 z"/>
+    <rect fill="none" height="400px" stroke="blue" width="400px" x="50" y="50"/>
+  </g>
+</svg>
