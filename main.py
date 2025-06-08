@@ -1,7 +1,8 @@
 import customtkinter as ctk
 from tkinter import filedialog
 import os
-# Cambiar la importación para usar la nueva función (o mantener 'optimize_image' si renombraste la función en el otro archivo)
+from PIL import Image # Ensure PIL is imported
+from test_svg_gen_isolated import create_final_svg # Import from the new test script
 from image_processor import optimize_image_iteratively as optimize_image 
 
 class App(ctk.CTk):
@@ -65,7 +66,8 @@ class App(ctk.CTk):
     def load_background_image(self):
         file_path = filedialog.askopenfilename(
             title="Seleccionar Imagen de Fondo",
-            filetypes=(("Archivos PNG", "*.png"), ("Archivos JPG/JPEG", "*.jpg;*.jpeg"), ("Todos los archivos", "*.*"))
+            # Assuming background can also be SVG
+            filetypes=(("Archivos SVG", "*.svg"), ("Archivos PNG", "*.png"), ("Archivos JPG/JPEG", "*.jpg;*.jpeg"), ("Todos los archivos", "*.*"))
         )
         if file_path:
             self.background_image_path = file_path
@@ -91,14 +93,16 @@ class App(ctk.CTk):
             self.lbl_status.configure(text="Listo para generar SVG.", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
         else:
             self.btn_generate_svg.configure(state="disabled")
+            # Provide more specific status messages
             if not self.main_image_path:
                  self.lbl_status.configure(text="Por favor, cargue la imagen principal.", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
             elif not self.background_image_path:
-                 self.lbl_status.configure(text="Por favor, cargue la imagen de fondo.", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+                 self.lbl_status.configure(text="Por favor, cargue la imagen de fondo (SVG o raster).", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
             elif not self.output_directory:
                  self.lbl_status.configure(text="Por favor, seleccione una carpeta de salida.", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-            else:
+            else: # Should not happen if logic is correct, but as a fallback
                  self.lbl_status.configure(text="Cargue imágenes y seleccione carpeta de salida.", text_color=ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+
 
     def generate_svg_action(self):
         if not self.main_image_path or not self.background_image_path or not self.output_directory:
@@ -115,9 +119,9 @@ class App(ctk.CTk):
                 os.makedirs(optimized_main_image_subdir)
             except OSError as e:
                 self.lbl_status.configure(text=f"Error al crear directorio: {optimized_main_image_subdir}. {e}", text_color="red")
+                print(f"Error creating directory for optimized image: {e}")
                 return
             
-        # Llamamos a la función de optimización (que ahora es la iterativa)
         self.optimized_main_image_actual_path = optimize_image(
             self.main_image_path,
             output_dir=optimized_main_image_subdir, 
@@ -126,6 +130,7 @@ class App(ctk.CTk):
 
         if not self.optimized_main_image_actual_path or not os.path.exists(self.optimized_main_image_actual_path):
             self.lbl_status.configure(text="Error al optimizar la imagen principal o no se generó archivo.", text_color="red")
+            print("Error: Optimized main image path not found or not generated.")
             return
 
         final_size_kb = os.path.getsize(self.optimized_main_image_actual_path) / 1024
@@ -133,10 +138,48 @@ class App(ctk.CTk):
         self.update_idletasks()
 
         print(f"Ruta de imagen principal (procesada): {self.optimized_main_image_actual_path}")
-        print(f"Ruta de imagen de fondo (sin procesar aún): {self.background_image_path}")
+        print(f"Ruta de imagen de fondo: {self.background_image_path}")
         print(f"Carpeta de salida seleccionada: {self.output_directory}")
 
-        self.lbl_status.configure(text="Vectorización y generación SVG pendientes.", text_color="orange")
+        # Get dimensions of the optimized foreground image
+        try:
+            with Image.open(self.optimized_main_image_actual_path) as img:
+                fg_width, fg_height = img.size
+            print(f"Optimized foreground image dimensions: {fg_width}x{fg_height}")
+        except Exception as e:
+            self.lbl_status.configure(text=f"Error obteniendo dimensiones de la imagen optimizada: {e}", text_color="red")
+            print(f"Error opening optimized image for dimensions: {e}")
+            return
+
+        # Define output path for the final SVG
+        # Use the original main image name for the SVG output, replacing its extension
+        base_main_img_name = os.path.splitext(os.path.basename(self.main_image_path))[0]
+        final_svg_filename = f"{base_main_img_name}_composite.svg" # Changed from "final_composite.svg"
+        output_svg_path = os.path.join(self.output_directory, final_svg_filename)
+        print(f"Final SVG output path: {output_svg_path}")
+
+        self.lbl_status.configure(text="Generando SVG final...", text_color="orange")
+        self.update_idletasks() # Ensure GUI updates
+
+        # Call create_final_svg from test_svg_gen_isolated
+        # Using foreground dimensions for the main SVG canvas size for now
+        success = create_final_svg(
+            output_svg_path=output_svg_path,
+            background_svg_path=self.background_image_path, # This is the original background path from GUI
+            foreground_png_path=self.optimized_main_image_actual_path,
+            fg_width=fg_width,
+            fg_height=fg_height,
+            svg_width=fg_width,  # Use foreground width for canvas
+            svg_height=fg_height # Use foreground height for canvas
+        )
+
+        if success and os.path.exists(output_svg_path):
+            self.lbl_status.configure(text=f"SVG final generado: {final_svg_filename}", text_color="green")
+            print(f"SVG final generado exitosamente en: {output_svg_path}")
+        else:
+            self.lbl_status.configure(text="Error al generar el SVG final.", text_color="red")
+            print(f"Fallo la generación del SVG final. Success: {success}, Path exists: {os.path.exists(output_svg_path)}")
+
 
 if __name__ == "__main__":
     app = App()
